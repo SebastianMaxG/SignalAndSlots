@@ -11,6 +11,23 @@
 #include <mutex>
 #endif // SIGNAL_LSMF
 
+/*
+ *  My implementation of a signal/slot system
+ *
+ *  It is used to connect functions to a signal and emit the signal (Basically Call Subscribed Functions)
+ *
+ *  It can be used in a single-threaded or multi-threaded environment
+ *  When creating this system I was inspired by the Godot signal/slot system
+ *  and I wanted to try to create my own version of it in C++
+ *  I tried to make a simpler version that kept an array of functions, but I found it hard to manage the connections
+ *  as well as making the connections dynamic (adding and removing connections)
+ *  There also were some problems with calling member functions since they are not included in the functional library
+ *  But I found that I needed to use slots to call member functions and static functions respectively
+ *  this also allows for further expansion of the system
+ *  
+ */
+
+
 namespace lsmf
 {
     namespace signal
@@ -42,6 +59,22 @@ namespace lsmf
 
             // Invoke the function (pure virtual function)
             virtual void Invoke(Args... args) = 0;
+
+
+            void SetConnectionPtr(Connection<Args...>* connectionPtr)
+            {
+                m_ConnectionPtr = connectionPtr;
+            }
+
+            Connection<Args...>* GetConnectionPtr() const
+            {
+                return m_ConnectionPtr;
+			}
+        private:
+
+            // Reverence to the owning Connection
+            Connection<Args...>* m_ConnectionPtr = nullptr;
+
         };
 
 
@@ -67,6 +100,7 @@ namespace lsmf
             {
                 m_Function(std::forward<Args>(args)...);
             } // nice
+
         private:
             // The function to be called
             std::function<void(Args...)>  m_Function;
@@ -82,7 +116,8 @@ namespace lsmf
         public:
             // Constructor with the class and the member function to be called
             MemberFunctionSlot(ClassType* functionClass, void(ClassType::* function) (Args...))
-                : m_FunctionClass(functionClass)
+                : BaseSlot<Args...>()
+        		, m_FunctionClass(functionClass)
                 , m_Function(function)
             {
 
@@ -100,9 +135,14 @@ namespace lsmf
                 }
                 else
                 {
-                    // Todo: disconnect the connection if the function class is null
+                    // Remove the connection if the function class is null
+                    if (this->GetConnectionPtr())
+                    {
+                        this->GetConnectionPtr()->Disconnect();
+                    }
                 }
             }
+
 
         private:
             // The class that contains the member function
@@ -144,6 +184,7 @@ namespace lsmf
                 if (m_Slot.get())
                 {
                     m_ConnectionState = ConnectionState::connected;
+                    m_Slot->SetConnectionPtr(this);
                 }
             }
 

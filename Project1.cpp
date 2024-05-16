@@ -91,7 +91,7 @@ void MultiThreadedExample()
         //std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
-    // Wait for a while to let the signal thread process the emitted value
+    // Wait for a while to let the signal thread process the emitted values
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
     // Disconnect the first connection
