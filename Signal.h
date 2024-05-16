@@ -66,7 +66,7 @@ namespace lsmf
             void Invoke(Args... args) override
             {
                 m_Function(std::forward<Args>(args)...);
-            }
+            } // nice
         private:
             // The function to be called
             std::function<void(Args...)>  m_Function;
@@ -236,6 +236,9 @@ namespace lsmf
 
             // Pointer to the signal
             Signal<Args...>* m_pSignal = nullptr;
+
+            // Make Signal a friend of Connection so it can set the state Disconnected
+            friend class Signal<Args...>;
         };
 
 
@@ -255,21 +258,17 @@ namespace lsmf
             }
 
             // Create a signal in a thread that is passed as a reference (useful if you want to join the thread)
-            Signal(std::jthread& SignalThread)
+            Signal(std::jthread& signalThread)
 	            : m_IsThreaded(true)
             {
                 std::jthread t(&Signal::Run, this);
-                SignalThread = std::move(t);
+                signalThread = std::move(t);
             }
 
             // Destructor
-            ~Signal()
+            ~Signal() noexcept
             {
-                for (int i{}; i < m_ListenerFunctions.size(); ++i)
-                {
-                    m_ListenerFunctions[i]->Disconnect();
-                }
-                m_ListenerFunctions.clear();
+                DisconnectAll();
             }
 
             Signal(Signal&&) = delete;
@@ -283,7 +282,7 @@ namespace lsmf
                 std::lock_guard<std::mutex> lock(m_ConnectionMutex);
                 for (int i{}; i < m_ListenerFunctions.size(); ++i)
                 {
-                    m_ListenerFunctions[i]->Disconnect();
+                    m_ListenerFunctions[i]->m_ConnectionState = Connection<Args...>::ConnectionState::disconnected;
                 }
                 m_ListenerFunctions.clear();
             }
@@ -320,7 +319,7 @@ namespace lsmf
             {
                 std::unique_lock<std::mutex> lock(m_QueMutex);
                 m_Que.push_back(std::make_tuple(args...));
-                lock.unlock();
+                lock.unlock();      
                 m_Condition.notify_one();
             }
 
@@ -424,4 +423,3 @@ namespace lsmf
     }
 }
 
-// nice
