@@ -9,7 +9,6 @@
 #include <utility>
 #include <vector>
 #include <mutex>
-#endif // SIGNAL_LSMF
 
 /*
  *  My implementation of a signal/slot system
@@ -24,7 +23,7 @@
  *  There also were some problems with calling member functions since they are not included in the functional library
  *  But I found that I needed to use slots to call member functions and static functions respectively
  *  this also allows for further expansion of the system
- *  
+ *
  */
 
 
@@ -69,7 +68,7 @@ namespace lsmf
             Connection<Args...>* GetConnectionPtr() const
             {
                 return m_ConnectionPtr;
-			}
+            }
         private:
 
             // Reverence to the owning Connection
@@ -117,7 +116,7 @@ namespace lsmf
             // Constructor with the class and the member function to be called
             MemberFunctionSlot(ClassType* functionClass, void(ClassType::* function) (Args...))
                 : BaseSlot<Args...>()
-        		, m_FunctionClass(functionClass)
+                , m_FunctionClass(functionClass)
                 , m_Function(function)
             {
 
@@ -300,10 +299,12 @@ namespace lsmf
 
             // Create a signal in a thread that is passed as a reference (useful if you want to join the thread)
             Signal(std::jthread& signalThread)
-	            : m_IsThreaded(true)
+                : m_IsThreaded(true)
             {
+                //TODO: replace the signalThread with a constructor tag
                 std::jthread t(&Signal::Run, this);
                 signalThread = std::move(t);
+                signalThread.detach();
             }
 
             // Destructor
@@ -360,43 +361,47 @@ namespace lsmf
             {
                 std::unique_lock<std::mutex> lock(m_QueMutex);
                 m_Que.push_back(std::make_tuple(args...));
-                lock.unlock();      
+                lock.unlock();
                 m_Condition.notify_one();
             }
 
             // End the signal thread
             void End()
-			{
-				m_ShouldEnd = true;
-				m_Condition.notify_one();
-			}
+            {
+                m_ShouldEnd = true;
+                m_Que.clear();
+                DisconnectAll();
+                m_Condition.notify_one();
+            }
 
             // Function for updating the signal in the main thread
             // This function is used when the signal is not threaded
             void Update()
             {
-                if (m_IsThreaded)
-				{
-					return;
-				}
+                if (m_IsThreaded or m_Que.empty())
+                {
+                    return;
+                }
+                while (!m_Que.empty())
+	            {
+		            // Get the arguments from the que
+                	std::unique_lock<std::mutex> lock(m_QueMutex);
 
-                // Get the arguments from the que
-                std::unique_lock<std::mutex> lock(m_QueMutex);
+                	std::tuple<Args...> argsTuple = m_Que.front();
+                	m_Que.pop_front();
 
-                std::tuple<Args...> argsTuple = m_Que.front();
-                m_Que.pop_front();
+                	lock.unlock();
 
-                lock.unlock();
-
-                // Invoke the listeners
-            	std::lock_guard<std::mutex> lock2(m_ConnectionMutex);
-                std::ranges::for_each
-                (
-                    m_ListenerFunctions, [&argsTuple](auto& function)
-                    {
-                        std::apply([&](auto&&... args) { function->Invoke(std::forward<Args>(args)...); }, argsTuple);
-                    }
-                );
+                	// Invoke the listeners
+                	std::lock_guard<std::mutex> lock2(m_ConnectionMutex);
+                	std::ranges::for_each
+					(
+						m_ListenerFunctions, [&argsTuple](auto& function)
+						{
+							std::apply([&](auto&&... args) { function->Invoke(std::forward<Args>(args)...); }, argsTuple);
+						}
+					);
+	            }
             }
 
 
@@ -422,10 +427,10 @@ namespace lsmf
                     //lock the connection mutex so we can safely invoke the listeners even if they are removed
                     std::lock_guard<std::mutex> lock2(m_ConnectionMutex);
                     std::ranges::for_each
-                	(
+                    (
                         m_ListenerFunctions, [&argsTuple](auto& function)
                         {
-                        std::apply([&](auto&&... args) { function->Invoke(std::forward<Args>(args)...); }, argsTuple);
+                            std::apply([&](auto&&... args) { function->Invoke(std::forward<Args>(args)...); }, argsTuple);
                         }
                     );
 
@@ -453,7 +458,7 @@ namespace lsmf
             std::condition_variable m_Condition;
 
             // Bool to check if the signal thread should keep running
-        	std::atomic_bool m_ShouldEnd = false;
+            std::atomic_bool m_ShouldEnd = false;
 
             // Bool to see if the signal tread is running
             std::atomic_bool m_IsActive = true;
@@ -461,6 +466,13 @@ namespace lsmf
             // Bool to see if the signal is threaded
             const bool m_IsThreaded = true;
         };
+
+        class GlobalSignal
+        {
+        public:
+	        
+        };
     }
 }
 
+#endif // !SIGNAL_LSMF

@@ -2,6 +2,16 @@
 #include <iostream>
 
 // A class with a member function that can be connected to a signal
+
+// Create a jthread
+std::jthread g_signalThread;
+
+// Create a signal in the jthread
+lsmf::signal::Signal<int> g_signal(g_signalThread);
+
+
+
+
 class MyClass {
 public:
     void MyMemberFunction(int value) {
@@ -117,5 +127,6 @@ int main()
     SingleThreadedExample();
     MultiThreadedExample();
 
+    g_signal.End();
     return 0;
 }
